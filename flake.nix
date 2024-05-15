@@ -1,39 +1,30 @@
 {
-  description = "Flake template: flake-parts + pre-commit-hooks + devshell + pkgsConfig";
+  description = "Infinite recursion error reproduction";
 
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";
-    pre-commit-hooks = {
-      url = "github:cachix/pre-commit-hooks.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    # flake-utils.url = "github:numtide/flake-utils";
-    my-lib.url = "github:zmrocze/nix-lib";
-    devshell = {
-      url = "github:numtide/devshell";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = inputs@{ self, nixpkgs, flake-parts, my-lib, ... }:
-    let
-      myLib = my-lib.lib;
-    in
-    flake-parts.lib.mkFlake { inherit inputs; } ({ config, ... }:
-      let
-        inherit (config) pkgsFor;
-      in
+  outputs = inputs@{ self, nixpkgs, flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } ({ config, lib, ... }:
       {
         imports = [
-          ./nix/pre-commit.nix
-          ./nix/shell.nix
-          ./nix/pkgs.nix
+          # defines pkgsConfig and pkgsFor, doesn't set any other module options
+          ./modules/pkgs.nix
         ];
-        # systems = [ "x86_64-linux" ];
         systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-        perSystem = { system, config, pkgs, ... }:
+        pkgsConfig = {
+          overlays = [
+            # commenting out the below overlay avoids error
+            (final: _: {
+              mybash = final.bash;
+            })
+          ];
+        };
+        perSystem = { system, ... }:
           {
-            _module.args.pkgs = pkgsFor system;
+            # defining pkgsFor without the pkgs module shenanigans, instead in normal let bindings above, also avoids error
+            packages.default = (config.pkgsFor system).hello;
           };
       });
 }
